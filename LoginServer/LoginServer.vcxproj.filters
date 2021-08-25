@@ -1,0 +1,141 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Main">
+      <UniqueIdentifier>{37405266-5b9f-4fd5-8ab6-7ab6c9c42972}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contents">
+      <UniqueIdentifier>{52e00d47-f06a-4351-80e7-67edd0a3d15b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lib">
+      <UniqueIdentifier>{97e8fd23-3418-4767-9716-e5aaf53fa72b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="NetLib">
+      <UniqueIdentifier>{7145f420-9f9b-434a-9b17-e9c6b2d1de3f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Protocol">
+      <UniqueIdentifier>{13e42796-4896-497c-9dbf-09907630ab5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Global">
+      <UniqueIdentifier>{1b3af2f2-99be-4431-a8d4-9487e71958ea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DB">
+      <UniqueIdentifier>{c9288137-ba66-43cf-b3fd-33b1a5ed5daa}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="NatvisFile.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="LoginServer.cpp">
+      <Filter>Contents</Filter>
+    </ClCompile>
+    <ClCompile Include="Global.cpp">
+      <Filter>Global</Filter>
+    </ClCompile>
+    <ClCompile Include="NetServerLib.cpp">
+      <Filter>NetLib</Filter>
+    </ClCompile>
+    <ClCompile Include="CPUUsage.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="FreeList.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="LockFreeQ.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="MemoryDump.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="MonitorPDH.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="Profiler.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="RingBuffer.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="SerializeBuffer.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="CharacterEncoding.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="DBConnector.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="RedisConnector.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="LoginServer.h">
+      <Filter>Contents</Filter>
+    </ClInclude>
+    <ClInclude Include="Global.h">
+      <Filter>Global</Filter>
+    </ClInclude>
+    <ClInclude Include="Protocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="NetServerLib.h">
+      <Filter>NetLib</Filter>
+    </ClInclude>
+    <ClInclude Include="CPUUsage.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="FreeList.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="LockFreeQ.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="LockFreeStack.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryDump.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryLog.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPool_TLS.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="MonitorPDH.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="Profiler.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="RingBuffer.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="SerializeBuffer.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="CommonProtocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="CharacterEncoding.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DBConnector.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="RedisConnector.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
