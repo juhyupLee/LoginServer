@@ -78,7 +78,7 @@ int main()
 				
 			}
 		}
-		loginServer->ServerMonitorPrint();
+		//loginServer->ServerMonitorPrint();
 		Sleep(999);
 	}
 

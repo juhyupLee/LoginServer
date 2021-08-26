@@ -111,6 +111,7 @@ private:
 	// 	   For Debug
 	//---------------------------------------------------------
 	LONG m_UpdateTPS;
+	LONG m_LoginTPS;
 
 
 	int64_t m_MaxTCPRetrans ;

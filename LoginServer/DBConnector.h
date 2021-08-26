@@ -77,7 +77,7 @@ private:
 	bool m_bInit;
 
 
-	sql::Driver* m_Driver;
+	static sql::Driver* m_Driver;
 	sql::Connection* m_Connect;
 
 };

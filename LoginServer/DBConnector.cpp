@@ -3,31 +3,16 @@
 #include "CharacterEncoding.h"
 #include <strsafe.h>
 
+sql::Driver* DBConnector::m_Driver = get_driver_instance(); 
+
 DBConnector::DBConnector()
 {
-	//---------------------------------------------------
-	// 	   생성자에선 Driver에대한 초기화만한다.
-	//---------------------------------------------------
-	m_Query=nullptr;
-	m_Result=nullptr;
-	m_Connect = nullptr;
-
-	QueryPerformanceFrequency(&m_QPF);
-	m_bInit = false;
-	try
-	{
-		m_Driver = get_driver_instance();
-	}
-	catch (sql::SQLException& e)
-	{
-		std::wstring errorMessage;
-		UTF8ToUTF16(e.what(), errorMessage);
-		_LOG->WriteLog(L"SQL", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SQL DBConnector() [ErrorMessage:%s] [ErrorCode:%d]", errorMessage.c_str(), e.getErrorCode());
-	}
+	
 }
 
 DBConnector::DBConnector(const WCHAR* dbIP,const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName)
 {
+
 	m_DBIP = dbIP;
 	m_DBPORT = dbPort;
 	m_UserID = user;
@@ -57,9 +42,29 @@ bool DBConnector::DBConInit(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR*
 	m_UserID = user;
 	m_DBPassword = password;
 	m_DBName = dbName;
+
+	//---------------------------------------------------
+	// 	   생성자에선 Driver에대한 초기화만한다.
+	//---------------------------------------------------
+	m_Query = nullptr;
+	m_Result = nullptr;
+	m_Connect = nullptr;
+
 	QueryPerformanceFrequency(&m_QPF);
 	m_bInit = true;
-	
+	//try
+	//{
+	//	m_Driver = get_driver_instance();
+
+	//	wprintf(L"m_Drive:%p\n", m_Driver);
+	//}
+	//catch (sql::SQLException& e)
+	//{
+	//	std::wstring errorMessage;
+	//	UTF8ToUTF16(e.what(), errorMessage);
+	//	_LOG->WriteLog(L"SQL", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SQL DBConnector() [ErrorMessage:%s] [ErrorCode:%d]", errorMessage.c_str(), e.getErrorCode());
+	//}
+
 	return m_bInit;
 }
 bool DBConnector::DBConRelease()
@@ -108,8 +113,9 @@ bool DBConnector::Connect(void)
 	{
 		char hostAddr[100] = { 0, };
 		sprintf_s(hostAddr, "tcp://%s:%s", ip.c_str(), dbPort.c_str());
-	
 		m_Connect = m_Driver->connect(hostAddr, user, password);
+
+		//wprintf(L"m_Connect:%p\n", m_Connect);
 
 		m_Connect->setSchema(dbName);
 
@@ -134,9 +140,11 @@ bool DBConnector::Disconnect(void)
 {
 	if (m_Connect != nullptr)
 	{
-		m_Connect->close();
-	
-		return true;
+		if (!m_Connect->isClosed())
+		{
+			m_Connect->close();
+			return true;
+		}
 	}
 
 	return false;

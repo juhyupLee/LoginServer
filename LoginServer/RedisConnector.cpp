@@ -6,6 +6,7 @@ RedisConnector::RedisConnector()
 	WSAStartup(version, &data);
 	m_Client = new cpp_redis::client;
 
+	wprintf(L"Redis m_Client:%p\n", m_Client);
 }
 
 RedisConnector::~RedisConnector()
@@ -21,7 +22,10 @@ void RedisConnector::Connect(const std::string& ip, size_t port)
 
 void RedisConnector::Disconnect()
 {
-	m_Client->disconnect();
+	if (m_Client->is_connected())
+	{
+		m_Client->disconnect();
+	}	
 }
 
 cpp_redis::reply RedisConnector::Get(const std::string& key)

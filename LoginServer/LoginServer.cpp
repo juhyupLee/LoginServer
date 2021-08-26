@@ -33,6 +33,9 @@ MyLoginServer::MyLoginServer()
 
    m_WakeTime = 0;
 
+   m_LoginTPS = 0;
+
+
 }
 
 MyLoginServer::~MyLoginServer()
@@ -67,40 +70,38 @@ void MyLoginServer::ServerMonitorPrint()
 
 
     wprintf(L"==========TPS=========\n");
-    wprintf(L"(1) Accept TPS : %d\n(2) Update TPS:%d\n(3) Send TPS:%d\n(4) Recv TPS:%d\n"
+    wprintf(L"Accept TPS : %d\nLogin TPS:%d\nSend TPS:%d\nRecv TPS:%d\n"
         , GetAcceptTPS()
-        , m_UpdateTPS
+        , m_LoginTPS
         , GetSendTPS()
         , GetRecvTPS());
 
     wprintf(L"==========Memory=========\n");
-    wprintf(L"(1) Packet PoolAlloc:%d \n(2) Packet Pool Count :%d \n(3) Packet Pool Use Count :%d \n(4) Client Pool Alloc:%d \n(5) Client Pool Count:%d \n(6) Client Use Count:%d \n(7) LockFreeQ Memory:%d \n(8) LockFreeStack Memory:%d \n(9) Update Q Alloc Memory:%d\n(10)Alloc Memory Count:%d\n(11)Free Memory Count:%d\n"
+    wprintf(L"Packet PoolAlloc:%d \nPacket Pool Count :%d \nPacket Pool Use Count :%d \nClient Pool Alloc:%d \nClient Pool Count:%d \nClient Use Count:%d \nAlloc Memory Count:%d\nFree Memory Count:%d \nDB Alloc Count:%d \nDB Pool Count:%d \nDB Use Count:%d \n"
         , NetPacket::GetMemoryPoolAllocCount()
         , NetPacket::GetPoolCount()
         , NetPacket::GetUseCount()
         , m_ClientPool.GetChunkCount()
         , m_ClientPool.GetPoolCount()
         , m_ClientPool.GetUseCount()
-        , GetSendQMeomryCount()
-        , GetLockFreeStackMemoryCount()
-        , m_ThreadQ.GetMemoryPoolAllocCount()
         , g_AllocMemoryCount
-        , g_FreeMemoryCount);
+        , g_FreeMemoryCount
+        , m_DBPool.GetChunkCount()
+        , m_DBPool.GetPoolCount()
+        , m_DBPool.GetUseCount());
 
     wprintf(L"==========Network =========\n");
-    wprintf(L"(1) NetworkTraffic(Send) :%d \n(2) TCP TimeOut ReleaseCount :% d \n"
+    wprintf(L"NetworkTraffic(Send) :%d \nTCP TimeOut ReleaseCount :% d \n"
         , GetNetworkTraffic()
         , g_TCPTimeoutReleaseCnt);
 
 
     wprintf(L"==========Count ===========\n");
-    wprintf(L"(1) Accept Count:%lld\t(2) Disconnect Count :%d\n(3) Session Count:%d\t(4) Client Count:%llu\n(5) UpdateThread Q Count:%d\n"
+    wprintf(L"Accept Count:%lld\tDisconnect Count :%d\nSession Count:%d\tClient Count:%llu\n"
         , GetAcceptCount()
         , g_DisconnectCount
         , m_SessionCount
-        , m_ClientMap.size()
-        , m_ThreadQ.GetQCount());
-        
+        , m_ClientMap.size());
     wprintf(L"==============================\n");
 
     if (GetAsyncKeyState(VK_F2))
@@ -111,6 +112,7 @@ void MyLoginServer::ServerMonitorPrint()
         }
     }
     m_UpdateTPS = 0;
+    m_LoginTPS = 0;
     //g_FreeMemoryCount = 0;
     //g_AllocMemoryCount = 0;
 
@@ -335,6 +337,7 @@ void MyLoginServer::MessageMarshalling(uint64_t sessionID, NetPacket* netPacket)
     {
     case en_PACKET_CS_LOGIN_REQ_LOGIN:
         PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(sessionID, netPacket);
+        InterlockedIncrement(&m_LoginTPS);
         break;
     default:
 #if DISCONLOG_USE ==1
@@ -421,7 +424,10 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
 
     }
 
+    
     tempRedis.Set(tempAccountNo, client->_SessionKey);
+    tempRedis.Disconnect();
+
     //-------------------------------------------------------------------------
     // Account table Á¢±Ù
     //-------------------------------------------------------------------------
@@ -462,6 +468,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     }
     delete resultDB;
 
+    tempDB->DBConRelease();
     m_DBPool.Free(tempDB);
 
     //if (tempAccountAno != client->_AccoutNo)
