@@ -19,6 +19,7 @@ public:
 	void Disconnect();
 	cpp_redis::reply Get(const std::string& key);
 	void Set(const std::string& key, const std::string& value);
+	void SetEx(const std::string& key, int64_t second, const std::string& value);
 private:
 	cpp_redis::client* m_Client;
 };

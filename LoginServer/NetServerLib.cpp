@@ -1221,7 +1221,6 @@ bool NetServer::SendPost(uint64_t  sessionID)
 		//-------------------------------------------------
 		return false;
 	}
-
 	do
 	{
 		loopCount++;
@@ -1300,6 +1299,16 @@ bool NetServer::SendPost(uint64_t  sessionID)
 				{
 					Crash();
 				}
+				WORD type;
+
+				//deQPacket->Decoding()
+				memcpy(&type, deQPacket->GetPayloadPtr(), sizeof(WORD));
+
+				if (type != 102)
+				{
+					Crash();
+				}
+				
 				if (deQPacket->GetPayloadSize() <= 0)
 				{
 					Crash();

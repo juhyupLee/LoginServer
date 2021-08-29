@@ -4,20 +4,14 @@
 #include "CommonProtocol.h"
 #include "CPUUsage.h"
 #include "MonitorPDH.h"
-#include "DBConnector.h"
 #include "CharacterEncoding.h"
-#include "RedisConnector.h"
-
-
 
 CPUUsage g_CPUUsage;
 MonitorPDH g_MonitorPDH;
 
 MyLoginServer::MyLoginServer()
     :NetServer(this),
-    m_JobPool(500),
-    m_ClientPool(500,true),
-    m_DBPool(500)
+    m_ClientPool(500,true)
 {
     wcscpy_s(m_BlackIPList[0], L"185.216.140.27"); // 네덜란드 블랙 IP
 
@@ -31,15 +25,18 @@ MyLoginServer::MyLoginServer()
    m_MaxTCPRetrans =0;
    m_Min_MaxTCPRetrans=INT64_MAX;
 
-   m_WakeTime = 0;
-
    m_LoginTPS = 0;
 
+   m_Redis = nullptr;
+
+   m_SQLTlsIndex = TlsAlloc();
+   m_DBConIndex = 0;
 
 }
 
 MyLoginServer::~MyLoginServer()
 {
+    TlsFree(m_SQLTlsIndex);
 }
 
 void MyLoginServer::ServerMonitorPrint()
@@ -48,7 +45,6 @@ void MyLoginServer::ServerMonitorPrint()
     g_MonitorPDH.ReNewPDH();
 
     wprintf(L"==========OS Resource=========\n");
-    wprintf(L"UpdateThread SleepTime :%d\n", m_WakeTime);
     wprintf(L"HardWare U:%.1f  K:%.1f  Total:%.1f\n", g_CPUUsage.ProcessorUser(), g_CPUUsage.ProcessorKernel(), g_CPUUsage.ProcessorTotal());
     wprintf(L"Process U:%.1f  K:%.1f  Total:%.1f\n", g_CPUUsage.ProcessUser(), g_CPUUsage.ProcessKernel(), g_CPUUsage.ProcessTotal());
     wprintf(L"Private Mem :%lld[K]\n", g_MonitorPDH.GetPrivateMemory() / 1024);
@@ -77,7 +73,7 @@ void MyLoginServer::ServerMonitorPrint()
         , GetRecvTPS());
 
     wprintf(L"==========Memory=========\n");
-    wprintf(L"Packet PoolAlloc:%d \nPacket Pool Count :%d \nPacket Pool Use Count :%d \nClient Pool Alloc:%d \nClient Pool Count:%d \nClient Use Count:%d \nAlloc Memory Count:%d\nFree Memory Count:%d \nDB Alloc Count:%d \nDB Pool Count:%d \nDB Use Count:%d \n"
+    wprintf(L"Packet PoolAlloc:%d \nPacket Pool Count :%d \nPacket Pool Use Count :%d \nClient Pool Alloc:%d \nClient Pool Count:%d \nClient Use Count:%d \nAlloc Memory Count:%d\nFree Memory Count:%d\n"
         , NetPacket::GetMemoryPoolAllocCount()
         , NetPacket::GetPoolCount()
         , NetPacket::GetUseCount()
@@ -85,10 +81,7 @@ void MyLoginServer::ServerMonitorPrint()
         , m_ClientPool.GetPoolCount()
         , m_ClientPool.GetUseCount()
         , g_AllocMemoryCount
-        , g_FreeMemoryCount
-        , m_DBPool.GetChunkCount()
-        , m_DBPool.GetPoolCount()
-        , m_DBPool.GetUseCount());
+        , g_FreeMemoryCount);
 
     wprintf(L"==========Network =========\n");
     wprintf(L"NetworkTraffic(Send) :%d \nTCP TimeOut ReleaseCount :% d \n"
@@ -214,25 +207,37 @@ MyLoginServer::Client* MyLoginServer::FindClient(uint64_t sessionID)
 {
     Client* findClient = nullptr;
 
+    m_Lock.Lock();
     auto iter = m_ClientMap.find(sessionID);
     if (iter == m_ClientMap.end())
     {
         return nullptr;
     }
     findClient = (*iter).second;
+    m_Lock.Unlock();
 
     return findClient;
 }
 
-
-
 bool MyLoginServer::LoginServerStart(WCHAR* ip, uint16_t port, DWORD runningThread, SocketOption& option, DWORD workerThreadCount, DWORD maxUserCount, TimeOutOption& timeOutOption)
 {
+    //-------------------------------------------------------------------
+    // 레디스 DB 연결
+    //-------------------------------------------------------------------
+    m_Redis = new RedisConnector;
+    m_Redis->Connect("127.0.0.1", 6379);
+
+    //--------------------------------------------------------------------
+    // TLS 에저자오디는 DBConnector Pointer를 관리하는 매니저를 만든다
+    // 추후 서버가 종료될때 메모리 정리를 위해 필요.
+    //--------------------------------------------------------------------
+    m_DBConManger = new DBConnector * [workerThreadCount];
 
     //-------------------------------------------------------------------
     // 워커스레드, Accept Thread  , Monitoring 스레드 가동
     //-------------------------------------------------------------------
     ServerStart(ip,port, runningThread,option,workerThreadCount,maxUserCount, timeOutOption);
+
 
     return true;
 }
@@ -244,8 +249,19 @@ bool MyLoginServer::LoginServerStop()
     //-------------------------------------------------------------------
     ServerStop();
 
- 
+    m_Redis->Disconnect();
+    delete m_Redis;
 
+    //------------------------------------------------------------------------
+    // TLS에 저장되어 있는 DBCon 객체들을 Disconnect해주고, delete해준다.
+    //------------------------------------------------------------------------
+    for (int i = 0; i < m_DBConIndex; ++i)
+    {
+        m_DBConManger[i]->Disconnect();
+        delete m_DBConManger[i];
+    }
+    delete []m_DBConManger;
+    m_DBConIndex = 0;
     return true;
 }
 
@@ -269,7 +285,13 @@ void MyLoginServer::CreateNewUser(uint64_t sessionID)
     Client* newClient = m_ClientPool.Alloc();
 
     newClient->_SessionID = sessionID;
+
+    //--------------------------------------------------
+    // 채팅서버와달리 로그인서버에서 Client관리는 Lock이필요함
+    //--------------------------------------------------
+    m_Lock.Lock();
     m_ClientMap.insert(std::make_pair(sessionID, newClient));
+    m_Lock.Unlock();
 
 }
 
@@ -292,6 +314,7 @@ void MyLoginServer::DeleteUser(uint64_t sessionID)
     curSession->_MemoryLog_IOCP.MemoryLogging(log);
 #endif
 
+    m_Lock.Lock();
     auto iter = m_ClientMap.find(sessionID);
     if (iter == m_ClientMap.end())
     {
@@ -300,11 +323,12 @@ void MyLoginServer::DeleteUser(uint64_t sessionID)
 
     Client* delClient = (*iter).second;
     m_ClientMap.erase(iter);
+    m_Lock.Unlock();
 
-
-   
 
     m_ClientPool.Free(delClient);
+   
+
 }
 
 void MyLoginServer::MessageMarshalling(uint64_t sessionID, NetPacket* netPacket)
@@ -372,28 +396,53 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
         Disconnect(sessionID);
         return; 
     }
+
+
+
     (*netPacket) >> client->_AccoutNo;
     (*netPacket).GetData(client->_SessionKey, 64);
 
-    netPacket->Clear();
 
 
-    DBConnector* tempDB = m_DBPool.Alloc();
-    tempDB->DBConInit(L"127.0.0.1", L"3306", L"root", L"tpwhd963", L"accountdb");
-    if (!tempDB->Connect())
+#if MEMORYLOG_USE ==1 
+    Session* curSession = FindSession(sessionID);
+    IOCP_Log log;
+    log.DataSettiong(InterlockedIncrement64(&g_IOCPMemoryNo), eIOCP_LINE::PACKET_PROCESS_LOGINSERVER, GetCurrentThreadId(), curSession->_Socket, curSession->_IOCount, (int64_t)curSession, sessionID, (int64_t)&curSession->_RecvOL, (int64_t)&curSession->_SendOL, curSession->_SendFlag);
+    g_MemoryLog_IOCP.MemoryLogging(log);
+#endif
+
+#if MEMORYLOG_USE  ==2
+    Session* curSession = FindSession(sessionID);
+    IOCP_Log log;
+    log.DataSettiong(InterlockedIncrement64(&g_IOCPMemoryNo), eIOCP_LINE::PACKET_PROCESS_LOGINSERVER, GetCurrentThreadId(), curSession->_Socket, curSession->_IOCount, (int64_t)curSession, sessionID, (int64_t)&curSession->_RecvOL, (int64_t)&curSession->_SendOL, curSession->_SendFlag, client->_AccoutNo);
+    g_MemoryLog_IOCP.MemoryLogging(log);
+    curSession->_MemoryLog_IOCP.MemoryLogging(log);
+
+
+#endif
+
+    DBConnector* dbConnector = (DBConnector * )TlsGetValue(m_SQLTlsIndex);
+    if (dbConnector == nullptr)
     {
-        Crash();
+        dbConnector = new DBConnector(L"127.0.0.1", L"3306", L"root", L"tpwhd963", L"accountdb");
+        m_DBConManger[InterlockedIncrement(&m_DBConIndex)] = dbConnector;
+        if (!dbConnector->Connect())
+        {
+            Crash();
+        }
+        TlsSetValue(m_SQLTlsIndex, dbConnector);
     }
+
     //-------------------------------------------------------------------------
     // sessionKey table 접근 여기서 SessionKey를읽어와 클라이언트의 SessionKey와 비교한후
     // 일치하면 레디스에 넣는다.
     //-------------------------------------------------------------------------
-    if (!tempDB->Query_Result(L"Select * from sessionkey where `accountno` = %lld", client->_AccoutNo))
+    if (!dbConnector->Query_Result(L"Select * from sessionkey where `accountno` = %lld", client->_AccoutNo))
     {
         Crash();
     }
 
-    sql::ResultSet* resultDB = tempDB->FetchResult();
+    sql::ResultSet* resultDB = dbConnector->FetchResult();
     if (resultDB == nullptr)
     {
         Crash();
@@ -410,46 +459,39 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     delete resultDB;
 
 
-    RedisConnector tempRedis;
-
-    tempRedis.Connect("127.0.0.1", 6379);
-    
-    
-    if (!tempRedis.Get(tempAccountNo).is_null())
+    if (!m_Redis->Get(tempAccountNo).is_null())
     {
         //---------------------------------
         // 중복접속
         //---------------------------------
         int a = 10;
-
     }
+    m_Redis->SetEx(tempAccountNo,5, client->_SessionKey);
 
-    
-    tempRedis.Set(tempAccountNo, client->_SessionKey);
-    tempRedis.Disconnect();
-
+    if (!m_Redis->Get(tempAccountNo).is_null())
+    {
+        //---------------------------------
+        // 중복접속
+        //---------------------------------
+        int a = 10;
+    }
     //-------------------------------------------------------------------------
     // Account table 접근
     //-------------------------------------------------------------------------
 
-    if (!tempDB->Query_Result(L"Select *from account where `accountno` = %lld", client->_AccoutNo))
+    if (!dbConnector->Query_Result(L"Select *from account where `accountno` = %lld", client->_AccoutNo))
     {
         Crash();
     }
 
-    resultDB = tempDB->FetchResult();
+    resultDB = dbConnector->FetchResult();
 
     if (resultDB == nullptr)
     {
         Crash();
     }
 
-    //--------------------------------------
-    // 만약, 연결을 커넥션풀처럼 재활용한다고하면, Discoonect를하지않고
-    // 그냥 메모리풀에 반납을 한다.(성능비교 필요)
-    //--------------------------------------
-    tempDB->Disconnect();
-
+    
     int64_t tempAccountAno;
     std::string tempUserID;
     std::string tempUserPass;
@@ -468,19 +510,16 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     }
     delete resultDB;
 
-    tempDB->DBConRelease();
-    m_DBPool.Free(tempDB);
-
-    //if (tempAccountAno != client->_AccoutNo)
-    //{
-    //    Crash();
-    //}
+    if (tempAccountAno != client->_AccoutNo)
+    {
+        Crash();
+    }
     UTF8ToUTF16(tempUserID.c_str(), wtempUserID);
     UTF8ToUTF16(tempUserPass.c_str(), wtempUserPass);
     UTF8ToUTF16(tempUserNick.c_str(), wtempUserNick);
 
-    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"127.0.0.1", 1000, L"127.0.0.1", 12001);
-
+    netPacket->Clear();
+    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"128.128.128.128", -1, L"127.0.0.1", 12001);
     SendUnicast(sessionID, netPacket);
 }
 
@@ -513,6 +552,10 @@ void MyLoginServer::SendUnicast(uint64_t sessionID, NetPacket* packet)
 
 void MyLoginServer::MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(NetPacket* packet, uint16_t type, int64_t accountNo, BYTE status,  const WCHAR* id, const WCHAR* nickName , const WCHAR* gameServerIP, uint16_t gameServerPort, const WCHAR* chattingServerIP, uint16_t chattingServerPort)
 {
+    if (type != en_PACKET_CS_LOGIN_RES_LOGIN)
+    {
+        Crash();
+    }
     *(packet) << type << accountNo << status;
 
     packet->PutData((char*)id, sizeof(WCHAR) * 20);

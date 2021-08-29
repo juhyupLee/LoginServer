@@ -1,7 +1,7 @@
 #pragma once
 #include "NetServerLib.h"
 #include "DBConnector.h"
-
+#include "RedisConnector.h"
 #include <list>
 
 class MyLoginServer : public NetServer
@@ -76,8 +76,6 @@ public:
 	virtual void OnTimeOut(uint64_t sessionID);
 
 private:
-	static unsigned int __stdcall UpdateThread(LPVOID param);
-private:
 	Client* FindClient(uint64_t sessionID);
 
 	void CreateNewUser(uint64_t sessionID);
@@ -89,20 +87,24 @@ private:
 
 public:
 	void PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionID, NetPacket* netPacket);
-
 	void SendUnicast(uint64_t sessionID, NetPacket* packet);
 
 	
 public:
 
 private:
-	MemoryPool_TLS<DBConnector> m_DBPool;
-	MemoryPool_TLS<Job> m_JobPool;
-	LockFreeQ<Job*> m_ThreadQ;
+
+	MyLock m_Lock;
+
+	DWORD m_SQLTlsIndex;
+
+	RedisConnector* m_Redis;
+	DBConnector** m_DBConManger;
+	LONG m_DBConIndex;
+
 	MemoryPool_TLS<Client> m_ClientPool;
 
 	std::unordered_map<uint64_t, Client*> m_ClientMap;
-	std::list<Client*>m_Sector[dfSECTOR_Y_MAX][dfSECTOR_X_MAX];
 
 	WCHAR m_BlackIPList[MAX_IP_COUNT][17];
 	WCHAR m_WhiteIPList[MAX_WHITE_IP_COUNT][17];
@@ -116,8 +118,6 @@ private:
 
 	int64_t m_MaxTCPRetrans ;
 	int64_t m_Min_MaxTCPRetrans;
-
-	DWORD m_WakeTime;
 
 	
 };

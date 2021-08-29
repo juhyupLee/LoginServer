@@ -79,10 +79,11 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>C:\Side Project\Procademy_Section4\LoginServer\LoginServer\RedisLib;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\SideProject\Procademy_Section4\LoginServer\LoginServer\LoginServer\RedisLib;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Side Project\Procademy_Section4\LoginServer\LoginServer\RedisLib;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

@@ -5,6 +5,7 @@
 // PATH=~~\MYSQLLib;%PATH%  DLL 검색할수있도록 Path설정
 /////////////////////////////////////////////////////////
 
+
 #pragma comment(lib,"MYSQLLib/mysqlcppconn.lib")
 #include <Windows.h>
 #include <stdlib.h>

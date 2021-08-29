@@ -4,9 +4,7 @@
 #include "MemoryDump.h"
 #include "Global.h"
 #include "Log.h"
-
 CrashDump dump;
-
 int main()
 {
 	MyLoginServer* loginServer = new  MyLoginServer();
@@ -78,7 +76,7 @@ int main()
 				
 			}
 		}
-		//loginServer->ServerMonitorPrint();
+		loginServer->ServerMonitorPrint();
 		Sleep(999);
 	}
 

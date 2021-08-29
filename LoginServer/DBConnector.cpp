@@ -12,28 +12,15 @@ DBConnector::DBConnector()
 
 DBConnector::DBConnector(const WCHAR* dbIP,const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName)
 {
-
+	QueryPerformanceFrequency(&m_QPF);
 	m_DBIP = dbIP;
 	m_DBPORT = dbPort;
 	m_UserID = user;
 	m_DBPassword = password;
 	m_DBName = dbName;
-	QueryPerformanceFrequency(&m_QPF);
 	m_bInit = false;
 
-	sql::Statement* stmt = nullptr;
-	try
-	{
-		m_Driver = get_driver_instance();
-	}
-	catch (sql::SQLException& e)
-	{
-		std::wstring errorMessage;
-		UTF8ToUTF16(e.what(), errorMessage);
 
-		_LOG->WriteLog(L"SQL", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SQL DBConnector() [ErrorMessage:%s] [ErrorCode:%d]", errorMessage.c_str(), e.getErrorCode());
-		return;
-	}
 }
 bool DBConnector::DBConInit(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName)
 {
@@ -52,18 +39,6 @@ bool DBConnector::DBConInit(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR*
 
 	QueryPerformanceFrequency(&m_QPF);
 	m_bInit = true;
-	//try
-	//{
-	//	m_Driver = get_driver_instance();
-
-	//	wprintf(L"m_Drive:%p\n", m_Driver);
-	//}
-	//catch (sql::SQLException& e)
-	//{
-	//	std::wstring errorMessage;
-	//	UTF8ToUTF16(e.what(), errorMessage);
-	//	_LOG->WriteLog(L"SQL", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SQL DBConnector() [ErrorMessage:%s] [ErrorCode:%d]", errorMessage.c_str(), e.getErrorCode());
-	//}
 
 	return m_bInit;
 }
@@ -76,6 +51,7 @@ bool DBConnector::DBConRelease()
 			m_Connect->close();
 		}
 	}
+
 	delete m_Connect;
 	delete m_Query;
 
@@ -83,6 +59,18 @@ bool DBConnector::DBConRelease()
 }
 DBConnector::~DBConnector()
 {
+	if (m_Connect != nullptr)
+	{
+		if (!m_Connect->isClosed())
+		{
+			m_Connect->close();
+		}
+	}
+	//---------------------------------------
+	// m_Result는 사용자가 메모리관리하는것으로 이관.
+	//---------------------------------------
+	delete m_Connect;
+	delete m_Query;
 }
 
 bool DBConnector::Connect(void)
@@ -128,8 +116,8 @@ bool DBConnector::Connect(void)
 	{
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
-
 		_LOG->WriteLog(L"SQL", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SQL Connect() [ErroMessage:%s][ErrorCode:%d]", errorMessage.c_str(), e.getErrorCode());
+
 		return false;
 	}
 
