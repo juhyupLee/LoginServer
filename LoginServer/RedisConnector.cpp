@@ -26,6 +26,8 @@ void RedisConnector::Connect(const std::string& ip, size_t port)
 	try
 	{
 		m_Client->connect(ip, port);
+		m_Client->sync_commit();
+
 	}
 	catch (std::exception e)
 	{
@@ -59,7 +61,8 @@ cpp_redis::reply RedisConnector::Get(const std::string& key)
 	try
 	{
 		future = m_Client->get(key);
-		m_Client->sync_commit();
+		//m_Client->sync_commit();
+		m_Client->commit();
 		return future.get();
 	}
 	catch (std::exception e)
@@ -90,6 +93,7 @@ void RedisConnector::SetEx(const std::string& key,int64_t second, const std::str
 	try
 	{
 		m_Client->setex(key, second, value);
+		m_Client->sync_commit();
 	}
 	catch (std::exception e)
 	{

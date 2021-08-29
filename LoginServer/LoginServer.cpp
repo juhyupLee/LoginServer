@@ -27,16 +27,19 @@ MyLoginServer::MyLoginServer()
 
    m_LoginTPS = 0;
 
-   m_Redis = nullptr;
 
    m_SQLTlsIndex = TlsAlloc();
-   m_DBConIndex = 0;
+   m_RedisTlsIndex = TlsAlloc();
+   m_DBConIndex = -1;
+   m_RedisConIndex = -1;
+
 
 }
 
 MyLoginServer::~MyLoginServer()
 {
     TlsFree(m_SQLTlsIndex);
+    TlsFree(m_RedisTlsIndex);
 }
 
 void MyLoginServer::ServerMonitorPrint()
@@ -221,14 +224,13 @@ MyLoginServer::Client* MyLoginServer::FindClient(uint64_t sessionID)
 
 bool MyLoginServer::LoginServerStart(WCHAR* ip, uint16_t port, DWORD runningThread, SocketOption& option, DWORD workerThreadCount, DWORD maxUserCount, TimeOutOption& timeOutOption)
 {
-    //-------------------------------------------------------------------
-    // 레디스 DB 연결
-    //-------------------------------------------------------------------
-    m_Redis = new RedisConnector;
-    m_Redis->Connect("127.0.0.1", 6379);
-
     //--------------------------------------------------------------------
-    // TLS 에저자오디는 DBConnector Pointer를 관리하는 매니저를 만든다
+    // TLS  RedisConnector Pointer를 관리하는 매니저를 만든다
+    // 추후 서버가 종료될때 메모리 정리를 위해 필요.
+    //--------------------------------------------------------------------
+    m_RedisManager = new RedisConnector * [workerThreadCount];
+    //--------------------------------------------------------------------
+    // TLS  DBConnector Pointer를 관리하는 매니저를 만든다
     // 추후 서버가 종료될때 메모리 정리를 위해 필요.
     //--------------------------------------------------------------------
     m_DBConManger = new DBConnector * [workerThreadCount];
@@ -249,19 +251,28 @@ bool MyLoginServer::LoginServerStop()
     //-------------------------------------------------------------------
     ServerStop();
 
-    m_Redis->Disconnect();
-    delete m_Redis;
-
     //------------------------------------------------------------------------
     // TLS에 저장되어 있는 DBCon 객체들을 Disconnect해주고, delete해준다.
     //------------------------------------------------------------------------
-    for (int i = 0; i < m_DBConIndex; ++i)
+    for (int i = 0; i <= m_DBConIndex; ++i)
     {
         m_DBConManger[i]->Disconnect();
         delete m_DBConManger[i];
     }
     delete []m_DBConManger;
-    m_DBConIndex = 0;
+    m_DBConIndex = -1;
+
+    //------------------------------------------------------------------------
+    // TLS에 저장되어 있는 Redis 객체들을 Disconnect해주고, delete해준다.
+    //------------------------------------------------------------------------
+    for (int i = 0; i <= m_DBConIndex; ++i)
+    {
+        m_RedisManager[i]->Disconnect();
+        delete m_RedisManager[i];
+    }
+    delete[]m_RedisManager;
+    m_RedisConIndex = -1;
+
     return true;
 }
 
@@ -414,7 +425,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
 #if MEMORYLOG_USE  ==2
     Session* curSession = FindSession(sessionID);
     IOCP_Log log;
-    log.DataSettiong(InterlockedIncrement64(&g_IOCPMemoryNo), eIOCP_LINE::PACKET_PROCESS_LOGINSERVER, GetCurrentThreadId(), curSession->_Socket, curSession->_IOCount, (int64_t)curSession, sessionID, (int64_t)&curSession->_RecvOL, (int64_t)&curSession->_SendOL, curSession->_SendFlag, client->_AccoutNo);
+    log.DataSettiong(InterlockedIncrement64(&g_IOCPMemoryNo), eIOCP_LINE::PACKET_PROCESS_LOGINSERVER, GetCurrentThreadId(), curSession->_Socket, curSession->_IOCount, (int64_t)curSession, sessionID, (int64_t)&curSession->_RecvOL, (int64_t)&curSession->_SendOL, curSession->_SendFlag, -1,-1,eRecvMessageType::NOTHING,-1,client->_AccoutNo);
     g_MemoryLog_IOCP.MemoryLogging(log);
     curSession->_MemoryLog_IOCP.MemoryLogging(log);
 
@@ -424,7 +435,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     DBConnector* dbConnector = (DBConnector * )TlsGetValue(m_SQLTlsIndex);
     if (dbConnector == nullptr)
     {
-        dbConnector = new DBConnector(L"127.0.0.1", L"3306", L"root", L"tpwhd963", L"accountdb");
+        dbConnector = new DBConnector(L"10.0.2.2", L"3306", L"root", L"tpwhd963", L"accountdb");
         m_DBConManger[InterlockedIncrement(&m_DBConIndex)] = dbConnector;
         if (!dbConnector->Connect())
         {
@@ -458,17 +469,27 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     }
     delete resultDB;
 
+    RedisConnector* redisConnector =(RedisConnector *)TlsGetValue(m_RedisTlsIndex);
+    if (redisConnector == nullptr)
+    {
+        redisConnector = new RedisConnector();
 
-    if (!m_Redis->Get(tempAccountNo).is_null())
+        m_RedisManager[InterlockedIncrement(&m_RedisConIndex)] = redisConnector;
+
+        redisConnector->Connect("10.0.1.2", 6379);
+   
+        TlsSetValue(m_RedisTlsIndex, redisConnector);
+    }
+    if (!redisConnector->Get(tempAccountNo).is_null())
     {
         //---------------------------------
         // 중복접속
         //---------------------------------
         int a = 10;
     }
-    m_Redis->SetEx(tempAccountNo,5, client->_SessionKey);
+    redisConnector->SetEx(tempAccountNo,5, client->_SessionKey);
 
-    if (!m_Redis->Get(tempAccountNo).is_null())
+    if (!redisConnector->Get(tempAccountNo).is_null())
     {
         //---------------------------------
         // 중복접속
@@ -519,7 +540,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     UTF8ToUTF16(tempUserNick.c_str(), wtempUserNick);
 
     netPacket->Clear();
-    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"128.128.128.128", -1, L"127.0.0.1", 12001);
+    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"128.128.128.128", -1, L"10.0.1.1",12001);
     SendUnicast(sessionID, netPacket);
 }
 

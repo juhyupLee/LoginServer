@@ -7,7 +7,6 @@
 class MyLoginServer : public NetServer
 {
 public:
-
 	enum class eJobTYPE
 	{
 		ON_CLIENT_JOIN,
@@ -93,14 +92,19 @@ public:
 public:
 
 private:
-
 	MyLock m_Lock;
 
 	DWORD m_SQLTlsIndex;
+	DWORD m_RedisTlsIndex;
 
-	RedisConnector* m_Redis;
 	DBConnector** m_DBConManger;
+	
 	LONG m_DBConIndex;
+	LONG m_RedisConIndex;
+
+	RedisConnector** m_RedisManager;
+	//RedisConnector* m_Redis;
+
 
 	MemoryPool_TLS<Client> m_ClientPool;
 
