@@ -18,6 +18,8 @@
 #include "MYSQLLib/Connector C++ 8.0/include/jdbc/cppconn/resultset.h"
 #include "MYSQLLib/Connector C++ 8.0/include/jdbc/cppconn/statement.h"
 
+
+
 class DBConnector
 {
 public:
@@ -33,13 +35,6 @@ public:
 	DBConnector(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName);
 	virtual		~DBConnector();
 
-	//----------------------------------------------------
-	// 	   MemoryPool을쓴다면 , 직접초기화 및 연결유지.
-	//----------------------------------------------------
-	bool DBConInit(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName);
-	DBConnector();
-	bool DBConRelease();
-
 
 	//////////////////////////////////////////////////////////////////////
 	// MySQL DB 연결
@@ -52,14 +47,17 @@ public:
 	bool		Disconnect(void);
 
 
-	//////////////////////////////////////////////////////////////////////
-	// 쿼리 날리고 결과셋 임시 보관
-	//
-	//////////////////////////////////////////////////////////////////////
-	bool		Query(WCHAR* szStringFormat, ...);
-	bool		Query_Result(const WCHAR* stringFormat, ...);	// DBWriter 스레드의 Save 쿼리 전용
-															// 결과셋을 저장하지 않음.
+	//----------------------------------------------------
+	// 	   Quert날리고 결과는 없음.
+	//----------------------------------------------------
+	bool		Query(WCHAR* stringFormat, ...);
+	bool		Query(const WCHAR* stringFormat);
 
+	//----------------------------------------------------
+	// 	   Quert날리고 결과가 있음 FetchResult해서 결과를뽑아와야함
+	//----------------------------------------------------
+	bool		Query_Result(const WCHAR* stringFormat, ...);	
+	bool		Query_Result(WCHAR* stringFormat);
 	sql::ResultSet* FetchResult();
 
 
@@ -75,10 +73,53 @@ private:
 	LARGE_INTEGER m_QueryStartTime;
 	LARGE_INTEGER m_QueryEndTime;
 	LARGE_INTEGER m_QPF;
-	bool m_bInit;
 
 
 	static sql::Driver* m_Driver;
 	sql::Connection* m_Connect;
+
+};
+
+class TLSDBConnector
+{
+
+	enum
+	{
+		QUERY_MAX_LEN = 2048,
+		LOG_TIME = 500
+	};
+
+public:
+	TLSDBConnector(const WCHAR* dbIP, const WCHAR* dbPort, const WCHAR* user, const WCHAR* password, const WCHAR* dbName, int threadCount);
+	~TLSDBConnector();
+	void Crash();
+public:
+
+	//----------------------------------------------------
+	// 	   Quert날리고 결과는 없음.
+	//----------------------------------------------------
+	bool		Query(WCHAR* stringFormat, ...);
+
+
+	//----------------------------------------------------
+	// 	   Quert날리고 결과가 있음 FetchResult해서 결과를뽑아와야함
+	//----------------------------------------------------
+	bool		Query_Result(const WCHAR* stringFormat, ...);
+
+	sql::ResultSet* FetchResult();
+
+	DBConnector* GetPointerTLS();
+private:
+	DWORD m_TlsIndex;
+	DBConnector** m_DBConArray;
+	LONG m_DBConIndex;
+
+private:
+	std::wstring m_UserID;
+
+	std::wstring m_DBIP;
+	std::wstring m_DBPORT;
+	std::wstring m_DBPassword;
+	std::wstring m_DBName;
 
 };

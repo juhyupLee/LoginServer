@@ -4,7 +4,6 @@
 
 class MyLoginServer;
 
-
 enum eSendFlag
 {
 	SENDPOST_ENTRY,  //0

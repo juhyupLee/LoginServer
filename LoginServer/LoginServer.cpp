@@ -28,9 +28,7 @@ MyLoginServer::MyLoginServer()
    m_LoginTPS = 0;
 
 
-   m_SQLTlsIndex = TlsAlloc();
    m_RedisTlsIndex = TlsAlloc();
-   m_DBConIndex = -1;
    m_RedisConIndex = -1;
 
 
@@ -38,7 +36,6 @@ MyLoginServer::MyLoginServer()
 
 MyLoginServer::~MyLoginServer()
 {
-    TlsFree(m_SQLTlsIndex);
     TlsFree(m_RedisTlsIndex);
 }
 
@@ -233,7 +230,7 @@ bool MyLoginServer::LoginServerStart(WCHAR* ip, uint16_t port, DWORD runningThre
     // TLS  DBConnector Pointer를 관리하는 매니저를 만든다
     // 추후 서버가 종료될때 메모리 정리를 위해 필요.
     //--------------------------------------------------------------------
-    m_DBConManger = new DBConnector * [workerThreadCount];
+    m_TLSDBCon = new TLSDBConnector(SQL_IP, L"3306", L"root", L"tpwhd963", L"accountdb", workerThreadCount);
 
     //-------------------------------------------------------------------
     // 워커스레드, Accept Thread  , Monitoring 스레드 가동
@@ -254,18 +251,12 @@ bool MyLoginServer::LoginServerStop()
     //------------------------------------------------------------------------
     // TLS에 저장되어 있는 DBCon 객체들을 Disconnect해주고, delete해준다.
     //------------------------------------------------------------------------
-    for (int i = 0; i <= m_DBConIndex; ++i)
-    {
-        m_DBConManger[i]->Disconnect();
-        delete m_DBConManger[i];
-    }
-    delete []m_DBConManger;
-    m_DBConIndex = -1;
+    delete m_TLSDBCon;
 
     //------------------------------------------------------------------------
     // TLS에 저장되어 있는 Redis 객체들을 Disconnect해주고, delete해준다.
     //------------------------------------------------------------------------
-    for (int i = 0; i <= m_DBConIndex; ++i)
+    for (int i = 0; i <= m_RedisConIndex; ++i)
     {
         m_RedisManager[i]->Disconnect();
         delete m_RedisManager[i];
@@ -432,28 +423,17 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
 
 #endif
 
-    DBConnector* dbConnector = (DBConnector * )TlsGetValue(m_SQLTlsIndex);
-    if (dbConnector == nullptr)
-    {
-        dbConnector = new DBConnector(L"10.0.2.2", L"3306", L"root", L"tpwhd963", L"accountdb");
-        m_DBConManger[InterlockedIncrement(&m_DBConIndex)] = dbConnector;
-        if (!dbConnector->Connect())
-        {
-            Crash();
-        }
-        TlsSetValue(m_SQLTlsIndex, dbConnector);
-    }
 
     //-------------------------------------------------------------------------
     // sessionKey table 접근 여기서 SessionKey를읽어와 클라이언트의 SessionKey와 비교한후
     // 일치하면 레디스에 넣는다.
     //-------------------------------------------------------------------------
-    if (!dbConnector->Query_Result(L"Select * from sessionkey where `accountno` = %lld", client->_AccoutNo))
+    if (!m_TLSDBCon->Query_Result(L"Select * from sessionkey where `accountno` = %lld", client->_AccoutNo))
     {
         Crash();
     }
 
-    sql::ResultSet* resultDB = dbConnector->FetchResult();
+    sql::ResultSet* resultDB = m_TLSDBCon->FetchResult();
     if (resultDB == nullptr)
     {
         Crash();
@@ -476,7 +456,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
 
         m_RedisManager[InterlockedIncrement(&m_RedisConIndex)] = redisConnector;
 
-        redisConnector->Connect("10.0.1.2", 6379);
+        redisConnector->Connect(REDIS_IP, 6379);
    
         TlsSetValue(m_RedisTlsIndex, redisConnector);
     }
@@ -500,12 +480,12 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     // Account table 접근
     //-------------------------------------------------------------------------
 
-    if (!dbConnector->Query_Result(L"Select *from account where `accountno` = %lld", client->_AccoutNo))
+    if (!m_TLSDBCon->Query_Result(L"Select *from account where `accountno` = %lld", client->_AccoutNo))
     {
         Crash();
     }
 
-    resultDB = dbConnector->FetchResult();
+    resultDB = m_TLSDBCon->FetchResult();
 
     if (resultDB == nullptr)
     {
@@ -540,7 +520,7 @@ void MyLoginServer::PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionI
     UTF8ToUTF16(tempUserNick.c_str(), wtempUserNick);
 
     netPacket->Clear();
-    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"128.128.128.128", -1, L"10.0.1.1",12001);
+    MakePacket_en_PACKET_CS_LOGIN_RES_LOGIN(netPacket, en_PACKET_CS_LOGIN_RES_LOGIN,tempAccountAno, dfLOGIN_STATUS_OK,  wtempUserID.c_str(), wtempUserNick.c_str(), L"128.128.128.128", -1, CHATSERVER_IP,12001);
     SendUnicast(sessionID, netPacket);
 }
 

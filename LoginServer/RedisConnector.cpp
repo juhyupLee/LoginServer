@@ -9,7 +9,6 @@ RedisConnector::RedisConnector()
 	WSADATA data;
 	WSAStartup(version, &data);
 	m_Client = new cpp_redis::client;
-	//wprintf(L"Redis m_Client:%p\n", m_Client);
 }
 
 RedisConnector::~RedisConnector()
@@ -34,6 +33,8 @@ void RedisConnector::Connect(const std::string& ip, size_t port)
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
 		_LOG->WriteLog(L"Redis", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"Connect() Error :%s", errorMessage);
+		Crash();
+
 	}
 }
 
@@ -51,6 +52,7 @@ void RedisConnector::Disconnect()
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
 		_LOG->WriteLog(L"Redis", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"Disconnect() Error :%s", errorMessage);
+		Crash();
 	}
 	
 }
@@ -61,15 +63,16 @@ cpp_redis::reply RedisConnector::Get(const std::string& key)
 	try
 	{
 		future = m_Client->get(key);
-		//m_Client->sync_commit();
-		m_Client->commit();
+		m_Client->sync_commit();
 		return future.get();
 	}
 	catch (std::exception e)
 	{
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
+
 		_LOG->WriteLog(L"Redis", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"Get() Error :%s", errorMessage);
+		Crash();
 		return future.get();
 	}
 }
@@ -79,14 +82,16 @@ void RedisConnector::Set(const std::string& key, const std::string& value)
 	try
 	{
 		m_Client->set(key, value);
+
 	}
 	catch (std::exception e)
 	{
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
 		_LOG->WriteLog(L"Redis", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"Set() Error :%s", errorMessage);
+		Crash();
 	}
-	//m_Client->sync_commit();
+	//
 }
 void RedisConnector::SetEx(const std::string& key,int64_t second, const std::string& value)
 {
@@ -100,5 +105,6 @@ void RedisConnector::SetEx(const std::string& key,int64_t second, const std::str
 		std::wstring errorMessage;
 		UTF8ToUTF16(e.what(), errorMessage);
 		_LOG->WriteLog(L"Redis", SysLog::eLogLevel::LOG_LEVEL_ERROR, L"SetEx() Error :%s", errorMessage);
+		Crash();
 	}
 }

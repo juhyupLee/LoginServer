@@ -4,6 +4,16 @@
 #include "RedisConnector.h"
 #include <list>
 
+#define SQL_IP L"10.0.2.2"
+#define REDIS_IP "10.0.1.2"
+#define CHATSERVER_IP L"10.0.1.1"
+
+//#define SQL_IP L"127.0.0.1"
+//#define REDIS_IP "127.0.0.1"
+//#define CHATSERVER_IP L"127.0.0.1"
+
+
+
 class MyLoginServer : public NetServer
 {
 public:
@@ -88,23 +98,17 @@ public:
 	void PacketProcess_en_PACKET_CS_LOGIN_REQ_LOGIN(uint64_t sessionID, NetPacket* netPacket);
 	void SendUnicast(uint64_t sessionID, NetPacket* packet);
 
-	
 public:
 
 private:
 	MyLock m_Lock;
+	TLSDBConnector* m_TLSDBCon;
 
-	DWORD m_SQLTlsIndex;
+
 	DWORD m_RedisTlsIndex;
-
-	DBConnector** m_DBConManger;
-	
-	LONG m_DBConIndex;
 	LONG m_RedisConIndex;
-
 	RedisConnector** m_RedisManager;
-	//RedisConnector* m_Redis;
-
+	
 
 	MemoryPool_TLS<Client> m_ClientPool;
 
@@ -122,6 +126,4 @@ private:
 
 	int64_t m_MaxTCPRetrans ;
 	int64_t m_Min_MaxTCPRetrans;
-
-	
 };
